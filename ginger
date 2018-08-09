@@ -1,0 +1,44 @@
+/* Monthly Ginger.IO text eligibility. Change reporting period as needed. */
+WITH ginger_text AS
+(
+    SELECT DISTINCT
+      COALESCE(c.firstname, prt_first)                             AS name_first,
+      COALESCE(c.lastname, prt_last)                               AS name_last,
+      COALESCE(c.birthdate :: date, prt_birth_date :: date)        AS birthdate,
+      COALESCE(c.mailingcity, prt_city)                            AS city,
+      COALESCE(c.mailingpostalcode, CAST(prt_zip_code AS VARCHAR)) AS zip_code,
+      CASE WHEN ps_welfare_status = 'E' AND ps_class != '' AND ps_class NOT LIKE '%X%'
+                AND ps_reason_code IN ('', 'C', 'FL') AND ps_employer_code NOT IN
+                                                          ('90001', '4000', '145', '146', '156', '147', '900', '157',
+                                                           '90003', '90002', '143', '155', '167', '122', '136', '152',
+                                                           '166', '201', '220')
+                AND ps_date = '2018-07-01' --REPORTING PERIOD
+        THEN 'Video'
+      ELSE 'Text'
+      END                                                          AS eligibility_status
+    FROM hbt.eligibility AS e
+      LEFT JOIN staging.zasid_mapping AS z
+        ON CAST(e.ps_ss_nbr AS VARCHAR) = z.kn_number
+      LEFT JOIN hbt.demographic AS d
+        ON CAST(e.ps_ss_nbr AS VARCHAR) = d.prt_ss_nbr
+      LEFT JOIN acquisition.sf_contact AS c
+        ON z.contactid = c.contactid
+    WHERE ps_employer_code NOT IN ('90001', '4000', '145', '146', '156', '147', '900', '157', '90003', '90002', '143',
+                                   '155', '167', '122', '136', '152', '166', '201', '220')
+          AND ps_date = '2018-07-01' --REPORTING PERIOD
+          AND ps_6_hours >= 0
+    GROUP BY name_last, name_first, COALESCE(c.birthdate :: date, prt_birth_date :: date), city, zip_code,
+      eligibility_status
+    ORDER BY name_last, name_first
+)
+SELECT
+  name_first,
+  name_last,
+  birthdate,
+  city,
+  zip_code,
+  eligibility_status
+FROM ginger_text
+/* Last name and birthdate critical for Ginger.io's eligibility verification */
+WHERE name_last != ''
+      AND birthdate IS NOT NULL;
