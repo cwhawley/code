@@ -1,21 +1,32 @@
-/* Monthly Ginger.IO text eligibility. Change reporting period as needed. */
+/* Monthly Ginger.IO eligibility. Change reporting period as needed. */
 WITH ginger_text AS
 (
     SELECT DISTINCT
+      ps_ss_nbr,
       COALESCE(c.firstname, prt_first)                             AS name_first,
       COALESCE(c.lastname, prt_last)                               AS name_last,
       COALESCE(c.birthdate :: date, prt_birth_date :: date)        AS birthdate,
       COALESCE(c.mailingcity, prt_city)                            AS city,
       COALESCE(c.mailingpostalcode, CAST(prt_zip_code AS VARCHAR)) AS zip_code,
-      CASE WHEN ps_welfare_status = 'E' AND ps_class != '' AND ps_class NOT LIKE '%X%'
+      CASE WHEN ps_welfare_status = 'E' AND ps_class NOT LIKE '%X%'
                 AND ps_reason_code IN ('', 'C', 'FL') AND ps_employer_code NOT IN
                                                           ('90001', '4000', '145', '146', '156', '147', '900', '157',
                                                            '90003', '90002', '143', '155', '167', '122', '136', '152',
                                                            '166', '201', '220')
-                AND ps_date = '2018-07-01' --REPORTING PERIOD
+                AND ps_date = '2018-08-01'
         THEN 'Video'
       ELSE 'Text'
-      END                                                          AS eligibility_status
+      END                                                          AS ginger_eligibility,
+      CASE WHEN SUBSTRING(ps_class, 4, 1) = 'K'
+        THEN 'Kaiser NW'
+      WHEN SUBSTRING(ps_class, 4, 1) = 'H'
+        THEN 'Kaiser WA'
+      WHEN SUBSTRING(ps_class, 4, 1) = 'P'
+        THEN 'Kaiser WA'
+      WHEN SUBSTRING(ps_class, 4, 1) = 'T'
+        THEN 'Aetna'
+      ELSE ''
+      END                                                          AS health_plan
     FROM hbt.eligibility AS e
       LEFT JOIN staging.zasid_mapping AS z
         ON CAST(e.ps_ss_nbr AS VARCHAR) = z.kn_number
@@ -25,20 +36,57 @@ WITH ginger_text AS
         ON z.contactid = c.contactid
     WHERE ps_employer_code NOT IN ('90001', '4000', '145', '146', '156', '147', '900', '157', '90003', '90002', '143',
                                    '155', '167', '122', '136', '152', '166', '201', '220')
-          AND ps_date = '2018-07-01' --REPORTING PERIOD
-          AND ps_6_hours >= 0
-    GROUP BY name_last, name_first, COALESCE(c.birthdate :: date, prt_birth_date :: date), city, zip_code,
-      eligibility_status
-    ORDER BY name_last, name_first
+          AND ps_date = '2018-08-01' --REPORTING PERIOD
+          AND ps_6_hours > 0
+    GROUP BY ps_ss_nbr, name_last, name_first, COALESCE(c.birthdate :: date, prt_birth_date :: date), city, zip_code,
+      ginger_eligibility, health_plan
 )
 SELECT
   name_first,
   name_last,
-  birthdate,
+  g.birthdate,
   city,
   zip_code,
-  eligibility_status
-FROM ginger_text
+  CASE WHEN ginger_eligibility = 'Text'
+    THEN ''
+  ELSE
+    CASE WHEN emailbounceddate IS NOT NULL
+      THEN ''
+    WHEN opt_out_do_not_contact = TRUE
+      THEN ''
+    WHEN b.email_status = 'Bounced'
+      THEN ''
+    WHEN o.optout = 'OptOut'
+      THEN ''
+    ELSE c.email
+    END
+  END AS email,
+  CASE WHEN ginger_eligibility = 'Text'
+    THEN ''
+  ELSE
+    CASE WHEN emailbounceddate IS NOT NULL
+      THEN ''
+    WHEN opt_out_do_not_contact = TRUE
+      THEN ''
+    WHEN b.email_status = 'Bounced'
+      THEN ''
+    WHEN o.optout = 'OptOut'
+      THEN ''
+    ELSE secondary_email
+    END
+  END AS email_secondary,
+  ginger_eligibility,
+  health_plan
+FROM ginger_text AS g
+  LEFT JOIN staging.zasid_mapping AS z
+    ON CAST(ps_ss_nbr AS VARCHAR) = z.kn_number
+  LEFT JOIN acquisition.sf_contact AS c
+    ON z.contactid = c.contactid
+  LEFT JOIN staging.bademails AS b
+    ON c.contactid = b.contactid
+  LEFT JOIN staging.optouts AS o
+    ON z.student_id = o.studentid
 /* Last name and birthdate critical for Ginger.io's eligibility verification */
 WHERE name_last != ''
-      AND birthdate IS NOT NULL;
+      AND g.birthdate IS NOT NULL
+ORDER BY name_last, name_first;
