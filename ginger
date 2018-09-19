@@ -41,7 +41,7 @@ WITH ginger_text AS
     GROUP BY ps_ss_nbr, name_last, name_first, COALESCE(c.birthdate :: date, prt_birth_date :: date), city, zip_code,
       ginger_eligibility, health_plan
 )
-SELECT
+SELECT DISTINCT
   name_first,
   name_last,
   g.birthdate,
@@ -86,7 +86,8 @@ FROM ginger_text AS g
     ON c.contactid = b.contactid
   LEFT JOIN staging.optouts AS o
     ON z.student_id = o.studentid
-/* Last name and birthdate critical for Ginger.io's eligibility verification */
+/* Last name, first name, and birthdate critical for Ginger.io's eligibility verification */
 WHERE name_last != ''
+      AND name_first != ''
       AND g.birthdate IS NOT NULL
-ORDER BY name_last, name_first;
+ORDER BY name_last, name_first, ginger_eligibility DESC;
