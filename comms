@@ -1,4 +1,4 @@
-/* Monthly Comms contact list. Change reporting period as needed. */
+/*** Monthly Comms contact list ***/
 WITH ginger_text AS
 (
     SELECT DISTINCT
@@ -33,7 +33,7 @@ WITH ginger_text AS
         ON z.contactid = c.contactid
     WHERE ps_employer_code NOT IN ('90001', '4000', '145', '146', '156', '147', '900', '157', '90003', '90002', '143',
                                    '155', '167', '122', '136', '152', '166', '201', '220')
-          AND ps_date = '2018-08-01' --REPORTING PERIOD
+          AND ps_date = DATE_TRUNC('month', CURRENT_DATE) --REPORTING PERIOD
           AND ps_6_hours > 0
     GROUP BY ps_ss_nbr, name_last, name_first, COALESCE(c.birthdate :: date, prt_birth_date :: date), city, zip_code,
       enrolled_status, health_plan
