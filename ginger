@@ -1,91 +1,100 @@
 /* Monthly Ginger.IO eligibility. */
 WITH ginger_text AS
-(
-    SELECT DISTINCT
-      ps_ss_nbr,
-      COALESCE(c.firstname, prt_first)                             AS name_first,
-      COALESCE(c.lastname, prt_last)                               AS name_last,
-      COALESCE(c.birthdate :: date, prt_birth_date :: date)        AS birthdate,
-      COALESCE(c.mailingcity, prt_city)                            AS city,
-      COALESCE(c.mailingpostalcode, CAST(prt_zip_code AS VARCHAR)) AS zip_code,
-      CASE WHEN ps_welfare_status = 'E'
-                AND ps_employer_code NOT IN ('90001', '4000', '145', '146', '156', '147', '900', '157', '90003',
-                                             '90002', '143', '155', '167', '122', '136', '152', '166', '201', '220')
-                AND ps_date = DATE_TRUNC('month', CURRENT_DATE) --REPORTING PERIOD
-        THEN 'Video'
-      ELSE 'Text'
-      END                                                          AS ginger_eligibility,
-      CASE WHEN SUBSTRING(ps_class, 4, 1) = 'K'
-        THEN 'Kaiser NW'
-      WHEN SUBSTRING(ps_class, 4, 1) = 'H'
-        THEN 'Kaiser WA'
-      WHEN SUBSTRING(ps_class, 4, 1) = 'P'
-        THEN 'Kaiser WA'
-      WHEN SUBSTRING(ps_class, 4, 1) = 'T'
-        THEN 'Aetna'
-      ELSE ''
-      END                                                          AS health_plan
-    FROM hbt.eligibility AS e
-      LEFT JOIN staging.zasid_mapping AS z
-        ON CAST(e.ps_ss_nbr AS VARCHAR) = z.kn_number
-      LEFT JOIN hbt.demographic AS d
-        ON CAST(e.ps_ss_nbr AS VARCHAR) = d.prt_ss_nbr
-      LEFT JOIN acquisition.sf_contact AS c
-        ON z.contactid = c.contactid
-    WHERE ps_employer_code NOT IN ('90001', '4000', '145', '146', '156', '147', '900', '157', '90003', '90002', '143',
-                                   '155', '167', '122', '136', '152', '166', '201', '220')
-          AND ps_date = DATE_TRUNC('month', CURRENT_DATE) --REPORTING PERIOD
-          AND ps_6_hours > 0
-    GROUP BY ps_ss_nbr, name_last, name_first, COALESCE(c.birthdate :: date, prt_birth_date :: date), city, zip_code,
-      ginger_eligibility, health_plan
-)
-SELECT DISTINCT
-  name_first,
-  name_last,
-  g.birthdate,
-  city,
-  zip_code,
-  CASE WHEN ginger_eligibility = 'Text'
-    THEN ''
-  ELSE
-    CASE WHEN emailbounceddate IS NOT NULL
-      THEN ''
-    WHEN opt_out_do_not_contact = TRUE
-      THEN ''
-    WHEN b.email_status = 'Bounced'
-      THEN ''
-    WHEN o.optout = 'OptOut'
-      THEN ''
-    ELSE c.email
-    END
-  END AS email,
-  CASE WHEN ginger_eligibility = 'Text'
-    THEN ''
-  ELSE
-    CASE WHEN emailbounceddate IS NOT NULL
-      THEN ''
-    WHEN opt_out_do_not_contact = TRUE
-      THEN ''
-    WHEN b.email_status = 'Bounced'
-      THEN ''
-    WHEN o.optout = 'OptOut'
-      THEN ''
-    ELSE secondary_email
-    END
-  END AS email_secondary,
-  ginger_eligibility,
-  health_plan
+       (
+         SELECT DISTINCT ps_ss_nbr,
+                         kn_key_name                                                    AS zenithid,
+                         COALESCE(c.firstname, b.prt_first)                             AS name_first,
+                         COALESCE(c.lastname, b.prt_last)                               AS name_last,
+                         COALESCE(c.birthdate :: date, b.prt_birth_date :: date)        AS birthdate,
+                         COALESCE(c.mailingcity, prt_city)                              AS city,
+                         COALESCE(c.mailingpostalcode, CAST(b.prt_zip_code AS VARCHAR)) AS zip_code,
+                         CASE
+                           WHEN ps_welfare_status = 'E'
+                             AND ps_employer_code NOT IN
+                                 ('90001', '4000', '145', '146', '156', '147', '900', '157', '90003',
+                                  '90002', '143', '155', '167', '122', '136', '152', '166', '201', '220')
+                             AND ps_date = DATE_TRUNC('month', CURRENT_DATE) --REPORTING PERIOD
+                             THEN 'Video'
+                           ELSE 'Text'
+                           END                                                          AS ginger_eligibility,
+                         CASE
+                           WHEN SUBSTRING(ps_class, 4, 1) = 'K'
+                             THEN 'Kaiser NW'
+                           WHEN SUBSTRING(ps_class, 4, 1) = 'H'
+                             THEN 'Kaiser WA'
+                           WHEN SUBSTRING(ps_class, 4, 1) = 'P'
+                             THEN 'Kaiser WA'
+                           WHEN SUBSTRING(ps_class, 4, 1) = 'T'
+                             THEN 'Aetna'
+                           ELSE ''
+                           END                                                          AS health_plan
+         FROM hbt.eligibility AS e
+                LEFT JOIN pstg.bgid_table AS b
+                          ON CAST(e.ps_ss_nbr AS VARCHAR) = b.prt_ss_nbr
+                LEFT JOIN hbt.demographic AS d
+                          ON CAST(e.ps_ss_nbr AS VARCHAR) = d.prt_ss_nbr
+                LEFT JOIN acquisition.sf_contact AS c
+                          ON b.contactid = c.contactid
+         WHERE ps_employer_code NOT IN
+               ('90001', '4000', '145', '146', '156', '147', '900', '157', '90003', '90002', '143',
+                '155', '167', '122', '136', '152', '166', '201', '220')
+           AND ps_date = DATE_TRUNC('month', CURRENT_DATE) --REPORTING PERIOD
+           AND ps_6_hours > 0
+         GROUP BY ps_ss_nbr, kn_key_name, name_last, name_first, COALESCE(c.birthdate :: date, b.prt_birth_date :: date), city,
+                  zip_code,
+                  ginger_eligibility, health_plan
+       )
+SELECT DISTINCT zenithid,
+                name_first,
+                name_last,
+                g.birthdate,
+                city,
+                zip_code,
+                CASE
+                  WHEN ginger_eligibility = 'Text'
+                    THEN ''
+                  ELSE
+                    CASE
+                      WHEN emailbounceddate IS NOT NULL
+                        THEN ''
+                      WHEN opt_out_do_not_contact = TRUE
+                        THEN ''
+                      WHEN b.email_status = 'Bounced'
+                        THEN ''
+                      WHEN o.optout = 'OptOut'
+                        THEN ''
+                      ELSE c.email
+                      END
+                  END AS email,
+                CASE
+                  WHEN ginger_eligibility = 'Text'
+                    THEN ''
+                  ELSE
+                    CASE
+                      WHEN emailbounceddate IS NOT NULL
+                        THEN ''
+                      WHEN opt_out_do_not_contact = TRUE
+                        THEN ''
+                      WHEN b.email_status = 'Bounced'
+                        THEN ''
+                      WHEN o.optout = 'OptOut'
+                        THEN ''
+                      ELSE secondary_email
+                      END
+                  END AS email_secondary,
+                ginger_eligibility,
+                health_plan
 FROM ginger_text AS g
-  LEFT JOIN staging.zasid_mapping AS z
-    ON CAST(ps_ss_nbr AS VARCHAR) = z.kn_number
-  LEFT JOIN acquisition.sf_contact AS c
-    ON z.contactid = c.contactid
-  LEFT JOIN staging.bademails AS b
-    ON c.contactid = b.contactid
-  LEFT JOIN staging.optouts AS o
-    ON z.student_id = o.studentid
-/* Last name, first name, and birthdate critical for Ginger.io's eligibility verification */
+       LEFT JOIN staging.zasid_mapping AS z
+                 ON CAST(ps_ss_nbr AS VARCHAR) = z.kn_number
+       LEFT JOIN acquisition.sf_contact AS c
+                 ON z.contactid = c.contactid
+       LEFT JOIN staging.bademails AS b
+                 ON c.contactid = b.contactid
+       LEFT JOIN staging.optouts AS o
+                 ON z.student_id = o.studentid
+  /* Last name, first name, and birthdate critical for Ginger.io's eligibility verification */
 WHERE name_last != ''
-      AND name_first != ''
-      AND g.birthdate IS NOT NULL
+  AND name_first != ''
+  AND g.birthdate IS NOT NULL
 ORDER BY name_last, name_first, ginger_eligibility DESC;
