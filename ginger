@@ -11,8 +11,8 @@ WITH ginger_text AS
                          CASE
                            WHEN ps_welfare_status = 'E'
                              AND ps_employer_code NOT IN
-                                 ('90001', '4000', '145', '146', '156', '147', '900', '157', '90003',
-                                  '90002', '143', '155', '167', '122', '136', '152', '166', '201', '220')
+                                 ('122', '136', '143', '145', '146', '147', '152', '155', '156', '157', '166', '167',
+                                  '201', '220', '900', '4000', '90001', '90002', '90003')
                              AND ps_date = DATE_TRUNC('month', CURRENT_DATE) --REPORTING PERIOD
                              THEN 'Video'
                            ELSE 'Text'
@@ -36,13 +36,13 @@ WITH ginger_text AS
                 LEFT JOIN acquisition.sf_contact AS c
                           ON b.contactid = c.contactid
          WHERE ps_employer_code NOT IN
-               ('90001', '4000', '145', '146', '156', '147', '900', '157', '90003', '90002', '143',
-                '155', '167', '122', '136', '152', '166', '201', '220')
+               ('122', '136', '143', '145', '146', '147', '152', '155', '156', '157', '166', '167', '201', '220', '900',
+                '4000', '90001', '90002', '90003')
            AND ps_date = DATE_TRUNC('month', CURRENT_DATE) --REPORTING PERIOD
            AND ps_6_hours > 0
-         GROUP BY ps_ss_nbr, kn_key_name, name_last, name_first, COALESCE(c.birthdate :: date, b.prt_birth_date :: date), city,
-                  zip_code,
-                  ginger_eligibility, health_plan
+         GROUP BY ps_ss_nbr, kn_key_name, name_last, name_first,
+                  COALESCE(c.birthdate :: date, b.prt_birth_date :: date), city, zip_code, ginger_eligibility,
+                  health_plan
        )
 SELECT DISTINCT zenithid,
                 name_first,
